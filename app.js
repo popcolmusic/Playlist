@@ -39,7 +39,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Función para actualizar playlist.txt
+// Actualizar playlist
 async function updatePlaylistFile() {
   try {
     const [videos] = await pool.query(
@@ -55,7 +55,7 @@ async function updatePlaylistFile() {
   }
 }
 
-// FFmpeg opcional (no bloquea si no hay playlist)
+// Opcional: FFmpeg stream a Owncast
 function startFFmpegStream() {
   const playlistPath = path.join(process.env.VIDEOS_DIR, 'playlist.txt');
   if (!fs.existsSync(playlistPath)) {
