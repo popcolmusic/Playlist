@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Radiocentro - Playlist</title>
+<style>
+    /* Colores y tipografía */
+    body {
+        margin: 0;
+        font-family: 'Segoe UI', sans-serif;
+        background-color: #0d0d0d;
+        color: #00ff66;
+    }
+    header {
+        background-color: #111;
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 5px rgba(0,255,102,0.3);
+    }
+    header h1 {
+        margin: 0;
+        font-size: 1.8rem;
+    }
+    .container {
+        padding: 2rem;
+    }
+    .upload-section {
+        background-color: #111;
+        border: 1px solid #00ff66;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .upload-section input[type="file"] {
+        display: block;
+        margin-top: 1rem;
+        color: #0d0d0d;
+    }
+    .video-list {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .video-list th, .video-list td {
+        padding: 0.8rem;
+        border-bottom: 1px solid #00ff66;
+        text-align: left;
+    }
+    .video-list th {
+        background-color: #111;
+    }
+    .btn {
+        padding: 0.4rem 1rem;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        background-color: #00ff66;
+        color: #0d0d0d;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+    .btn:hover {
+        background-color: #00cc52;
+    }
+    .status-active {
+        color: #00ff66;
+        font-weight: bold;
+    }
+    .status-inactive {
+        color: #ff3300;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>Radiocentro Playlist Admin</h1>
+    <nav>
+        <button class="btn" onclick="updatePlaylist()">Actualizar Playlist</button>
+    </nav>
+</header>
+
+<div class="container">
+
+    <!-- Subida de videos -->
+    <div class="upload-section">
+        <h2>Subir Video</h2>
+        <input type="file" id="videoFile" accept="video/*">
+        <button class="btn" onclick="uploadVideo()">Subir</button>
+    </div>
+
+    <!-- Lista de videos -->
+    <div class="video-section">
+        <h2>Lista de Videos</h2>
+        <table class="video-list">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="videoTable">
+                <!-- JS llenará los videos -->
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+    // Datos simulados (conectar luego con backend Node.js)
+    let videos = [
+        {id:1, title:'video1.mp4', active:true},
+        {id:2, title:'video2.mp4', active:false}
+    ];
+
+    const videoTable = document.getElementById('videoTable');
+
+    function renderVideos() {
+        videoTable.innerHTML = '';
+        videos.forEach(v => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${v.title}</td>
+                <td class="${v.active ? 'status-active' : 'status-inactive'}">
+                    ${v.active ? 'Activo' : 'Inactivo'}
+                </td>
+                <td>
+                    <button class="btn" onclick="toggleStatus(${v.id})">
+                        ${v.active ? 'Desactivar' : 'Activar'}
+                    </button>
+                    <button class="btn" onclick="deleteVideo(${v.id})">Eliminar</button>
+                </td>
+            `;
+            videoTable.appendChild(row);
+        });
+    }
+
+    function toggleStatus(id) {
+        videos = videos.map(v => v.id === id ? {...v, active: !v.active} : v);
+        renderVideos();
+        // Aquí llamas a backend Node.js para actualizar DB
+    }
+
+    function deleteVideo(id) {
+        videos = videos.filter(v => v.id !== id);
+        renderVideos();
+        // Aquí llamas a backend Node.js para borrar archivo + DB
+    }
+
+    function uploadVideo() {
+        const fileInput = document.getElementById('videoFile');
+        if(fileInput.files.length === 0) return alert('Selecciona un video');
+        const file = fileInput.files[0];
+        alert(`Video listo para subir: ${file.name}`);
+        // Aquí implementas fetch POST a backend Node.js
+    }
+
+    function updatePlaylist() {
+        alert('Playlist actualizada! (backend pendiente)');
+        // Aquí llamas al backend Node.js que genera playlist.txt
+    }
+
+    renderVideos();
+</script>
+
+</body>
+</html>
