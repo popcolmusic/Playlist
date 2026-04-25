@@ -4,6 +4,7 @@ const multer = require('multer');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,10 +30,83 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME
 });
 
+// Función para actualizar playlist
+async function updatePlaylistFile() {
+  const [videos] = await pool.query('SELECT * FROM videos WHERE active=1 ORDER BY position ASC');
+  const playlistContent = videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n');
+  fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
+  console.log('Playlist actualizada');
+  // Opcional: ejecutar FFmpeg para actualizar stream en Owncast
+  // startFFmpegStream();
+}
+
+// Función opcional para ejecutar FFmpeg
+function startFFmpegStream() {
+  const command = `ffmpeg -re -f concat -safe 0 -i ${process.env.VIDEOS_DIR}/playlist.txt -c copy -f flv rtmp://<TU_DOMINIO_OWNCAST>/live`;
+  const ffmpegProcess = exec(command);
+  ffmpegProcess.stdout.on('data', data => console.log('[FFmpeg]', data.toString()));
+  ffmpegProcess.stderr.on('data', data => console.error('[FFmpeg ERR]', data.toString()));
+  ffmpegProcess.on('close', code => console.log(`FFmpeg finalizó con código ${code}`));
+}
+
 // Rutas API
+
+// Ruta de prueba
 app.get('/api', (req, res) => res.send('API Radiocentro funcionando!'));
 
-// ... tus rutas /upload, /videos, /videos/:id/toggle, /playlist/update ...
+// Subir video
+app.post('/upload', upload.single('video'), async (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).send('No se subió ningún archivo');
+  const title = file.originalname;
+  try {
+    await pool.query('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,?)', 
+      [title, file.filename, 0]);
+    await updatePlaylistFile();
+    res.json({ message: 'Video subido y playlist actualizada', file });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al guardar en la base de datos');
+  }
+});
+
+// Listar videos
+app.get('/videos', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM videos ORDER BY position ASC');
+    res.json(rows);
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al obtener videos');
+  }
+});
+
+// Activar / desactivar
+app.post('/videos/:id/toggle', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await pool.query('SELECT active FROM videos WHERE id=?', [id]);
+    if(rows.length === 0) return res.status(404).send('Video no encontrado');
+    const newStatus = rows[0].active ? 0 : 1;
+    await pool.query('UPDATE videos SET active=? WHERE id=?', [newStatus, id]);
+    await updatePlaylistFile();
+    res.json({ message: 'Estado actualizado', active: newStatus });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al actualizar estado');
+  }
+});
+
+// Generar playlist manual
+app.post('/playlist/update', async (req, res) => {
+  try {
+    await updatePlaylistFile();
+    res.json({ message: 'Playlist actualizada' });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al generar playlist');
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
