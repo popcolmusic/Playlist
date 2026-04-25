@@ -10,9 +10,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors()); // Habilita CORS
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors()); // Habilita CORS para subdominios si es necesario
 app.use(express.static('public'));
 
 // Carpeta de videos
@@ -25,7 +25,7 @@ const upload = multer({ dest: process.env.VIDEOS_DIR });
 
 // Conexión MySQL
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'db', // Nombre del servicio MySQL en Docker
+  host: process.env.DB_HOST || 'db', // Servicio MySQL de Docker
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'radiouser',
   password: process.env.DB_PASS || 'pass1234',
@@ -48,7 +48,9 @@ app.get('/health', async (req, res) => {
 // Función para actualizar playlist.txt
 async function updatePlaylistFile() {
   try {
-    const [videos] = await pool.query('SELECT * FROM videos WHERE active=1 ORDER BY position ASC');
+    const [videos] = await pool.query(
+      'SELECT * FROM videos WHERE active=1 ORDER BY position ASC'
+    );
     const playlistContent = videos.length
       ? videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n')
       : '';
@@ -59,7 +61,7 @@ async function updatePlaylistFile() {
   }
 }
 
-// Endpoints API
+// Rutas API
 
 // Obtener lista de videos
 app.get('/videos', async (req, res) => {
@@ -78,7 +80,10 @@ app.post('/upload', upload.single('video'), async (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).send('No se subió ningún archivo');
     const title = file.originalname;
-    await pool.query('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)', [title, file.filename]);
+    await pool.query(
+      'INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)',
+      [title, file.filename]
+    );
     await updatePlaylistFile();
     res.json({ message: 'Video subido y playlist actualizada', file });
   } catch (err) {
