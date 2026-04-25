@@ -21,7 +21,7 @@ if (!fs.existsSync(process.env.VIDEOS_DIR)) {
 }
 const upload = multer({ dest: process.env.VIDEOS_DIR });
 
-// Conexión a MySQL
+// Conexión MySQL
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
@@ -30,84 +30,61 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME
 });
 
-// Función para actualizar playlist
+// Health check para Coolify
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.send('OK');
+  } catch(err) {
+    res.status(500).send('DB connection failed');
+  }
+});
+
+// Actualizar playlist
 async function updatePlaylistFile() {
   const [videos] = await pool.query('SELECT * FROM videos WHERE active=1 ORDER BY position ASC');
   const playlistContent = videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n');
   fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
   console.log('Playlist actualizada');
-  // Opcional: ejecutar FFmpeg para actualizar stream en Owncast
-  // startFFmpegStream();
 }
 
-// Función opcional para ejecutar FFmpeg
+// Opcional: FFmpeg stream a Owncast
 function startFFmpegStream() {
   const command = `ffmpeg -re -f concat -safe 0 -i ${process.env.VIDEOS_DIR}/playlist.txt -c copy -f flv rtmp://<TU_DOMINIO_OWNCAST>/live`;
   const ffmpegProcess = exec(command);
-  ffmpegProcess.stdout.on('data', data => console.log('[FFmpeg]', data.toString()));
-  ffmpegProcess.stderr.on('data', data => console.error('[FFmpeg ERR]', data.toString()));
+  ffmpegProcess.stdout.on('data', d => console.log('[FFmpeg]', d.toString()));
+  ffmpegProcess.stderr.on('data', d => console.error('[FFmpeg ERR]', d.toString()));
   ffmpegProcess.on('close', code => console.log(`FFmpeg finalizó con código ${code}`));
 }
 
 // Rutas API
+app.get('/videos', async (req, res) => {
+  const [rows] = await pool.query('SELECT * FROM videos ORDER BY position ASC');
+  res.json(rows);
+});
 
-// Ruta de prueba
-app.get('/api', (req, res) => res.send('API Radiocentro funcionando!'));
-
-// Subir video
 app.post('/upload', upload.single('video'), async (req, res) => {
   const file = req.file;
-  if (!file) return res.status(400).send('No se subió ningún archivo');
+  if(!file) return res.status(400).send('No se subió ningún archivo');
   const title = file.originalname;
-  try {
-    await pool.query('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,?)', 
-      [title, file.filename, 0]);
-    await updatePlaylistFile();
-    res.json({ message: 'Video subido y playlist actualizada', file });
-  } catch(err) {
-    console.error(err);
-    res.status(500).send('Error al guardar en la base de datos');
-  }
+  await pool.query('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)', [title, file.filename]);
+  await updatePlaylistFile();
+  res.json({ message: 'Video subido y playlist actualizada', file });
 });
 
-// Listar videos
-app.get('/videos', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM videos ORDER BY position ASC');
-    res.json(rows);
-  } catch(err) {
-    console.error(err);
-    res.status(500).send('Error al obtener videos');
-  }
-});
-
-// Activar / desactivar
 app.post('/videos/:id/toggle', async (req, res) => {
   const { id } = req.params;
-  try {
-    const [rows] = await pool.query('SELECT active FROM videos WHERE id=?', [id]);
-    if(rows.length === 0) return res.status(404).send('Video no encontrado');
-    const newStatus = rows[0].active ? 0 : 1;
-    await pool.query('UPDATE videos SET active=? WHERE id=?', [newStatus, id]);
-    await updatePlaylistFile();
-    res.json({ message: 'Estado actualizado', active: newStatus });
-  } catch(err) {
-    console.error(err);
-    res.status(500).send('Error al actualizar estado');
-  }
+  const [rows] = await pool.query('SELECT active FROM videos WHERE id=?', [id]);
+  if(rows.length === 0) return res.status(404).send('Video no encontrado');
+  const newStatus = rows[0].active ? 0 : 1;
+  await pool.query('UPDATE videos SET active=? WHERE id=?', [newStatus, id]);
+  await updatePlaylistFile();
+  res.json({ message: 'Estado actualizado', active: newStatus });
 });
 
-// Generar playlist manual
 app.post('/playlist/update', async (req, res) => {
-  try {
-    await updatePlaylistFile();
-    res.json({ message: 'Playlist actualizada' });
-  } catch(err) {
-    console.error(err);
-    res.status(500).send('Error al generar playlist');
-  }
+  await updatePlaylistFile();
+  res.json({ message: 'Playlist actualizada' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
