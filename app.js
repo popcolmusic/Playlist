@@ -42,15 +42,26 @@ app.get('/health', async (req, res) => {
 
 // Actualizar playlist
 async function updatePlaylistFile() {
-  const [videos] = await pool.query('SELECT * FROM videos WHERE active=1 ORDER BY position ASC');
-  const playlistContent = videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n');
-  fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
-  console.log('Playlist actualizada');
+  try {
+    const [videos] = await pool.query('SELECT * FROM videos WHERE active=1 ORDER BY position ASC');
+    const playlistContent = videos.length
+      ? videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n')
+      : '';
+    fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
+    console.log('Playlist actualizada');
+  } catch(err) {
+    console.error('Error al actualizar playlist:', err);
+  }
 }
 
 // Opcional: FFmpeg stream a Owncast
 function startFFmpegStream() {
-  const command = `ffmpeg -re -f concat -safe 0 -i ${process.env.VIDEOS_DIR}/playlist.txt -c copy -f flv rtmp://<TU_DOMINIO_OWNCAST>/live`;
+  const playlistPath = path.join(process.env.VIDEOS_DIR, 'playlist.txt');
+  if (!fs.existsSync(playlistPath)) {
+    console.warn('No hay playlist.txt para iniciar FFmpeg');
+    return;
+  }
+  const command = `ffmpeg -re -f concat -safe 0 -i ${playlistPath} -c copy -f flv rtmp://<TU_DOMINIO_OWNCAST>/live`;
   const ffmpegProcess = exec(command);
   ffmpegProcess.stdout.on('data', d => console.log('[FFmpeg]', d.toString()));
   ffmpegProcess.stderr.on('data', d => console.error('[FFmpeg ERR]', d.toString()));
@@ -59,32 +70,52 @@ function startFFmpegStream() {
 
 // Rutas API
 app.get('/videos', async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM videos ORDER BY position ASC');
-  res.json(rows);
+  try {
+    const [rows] = await pool.query('SELECT * FROM videos ORDER BY position ASC');
+    res.json(rows);
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al obtener videos');
+  }
 });
 
 app.post('/upload', upload.single('video'), async (req, res) => {
-  const file = req.file;
-  if(!file) return res.status(400).send('No se subió ningún archivo');
-  const title = file.originalname;
-  await pool.query('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)', [title, file.filename]);
-  await updatePlaylistFile();
-  res.json({ message: 'Video subido y playlist actualizada', file });
+  try {
+    const file = req.file;
+    if(!file) return res.status(400).send('No se subió ningún archivo');
+    const title = file.originalname;
+    await pool.query('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)', [title, file.filename]);
+    await updatePlaylistFile();
+    res.json({ message: 'Video subido y playlist actualizada', file });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al subir video');
+  }
 });
 
 app.post('/videos/:id/toggle', async (req, res) => {
-  const { id } = req.params;
-  const [rows] = await pool.query('SELECT active FROM videos WHERE id=?', [id]);
-  if(rows.length === 0) return res.status(404).send('Video no encontrado');
-  const newStatus = rows[0].active ? 0 : 1;
-  await pool.query('UPDATE videos SET active=? WHERE id=?', [newStatus, id]);
-  await updatePlaylistFile();
-  res.json({ message: 'Estado actualizado', active: newStatus });
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT active FROM videos WHERE id=?', [id]);
+    if(rows.length === 0) return res.status(404).send('Video no encontrado');
+    const newStatus = rows[0].active ? 0 : 1;
+    await pool.query('UPDATE videos SET active=? WHERE id=?', [newStatus, id]);
+    await updatePlaylistFile();
+    res.json({ message: 'Estado actualizado', active: newStatus });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al actualizar estado');
+  }
 });
 
 app.post('/playlist/update', async (req, res) => {
-  await updatePlaylistFile();
-  res.json({ message: 'Playlist actualizada' });
+  try {
+    await updatePlaylistFile();
+    res.json({ message: 'Playlist actualizada' });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send('Error al actualizar playlist');
+  }
 });
 
 app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
