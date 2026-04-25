@@ -1,58 +1,3 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel Radiocentro - Playlist</title>
-<style>
-    body { margin: 0; font-family: 'Segoe UI', sans-serif; background-color: #0d0d0d; color: #00ff66; }
-    header { background-color: #111; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,255,102,0.3); }
-    header h1 { margin:0; font-size:1.8rem; }
-    .container { padding: 2rem; }
-    .upload-section { background-color: #111; border: 1px solid #00ff66; padding: 1rem; border-radius: 10px; margin-bottom:2rem; }
-    .upload-section input[type="file"] { display:block; margin-top:1rem; }
-    .video-list { width: 100%; border-collapse: collapse; }
-    .video-list th, .video-list td { padding:0.8rem; border-bottom:1px solid #00ff66; text-align:left; }
-    .video-list th { background-color:#111; }
-    .btn { padding:0.4rem 1rem; border:none; border-radius:5px; cursor:pointer; background-color:#00ff66; color:#0d0d0d; font-weight:bold; transition:0.2s; }
-    .btn:hover { background-color:#00cc52; }
-    .status-active { color:#00ff66; font-weight:bold; }
-    .status-inactive { color:#ff3300; font-weight:bold; }
-</style>
-</head>
-<body>
-
-<header>
-    <h1>Radiocentro Playlist Admin</h1>
-    <nav>
-        <button class="btn" onclick="updatePlaylist()">Actualizar Playlist</button>
-    </nav>
-</header>
-
-<div class="container">
-
-    <div class="upload-section">
-        <h2>Subir Video</h2>
-        <input type="file" id="videoFile" accept="video/*">
-        <button class="btn" onclick="uploadVideo()">Subir</button>
-    </div>
-
-    <div class="video-section">
-        <h2>Lista de Videos</h2>
-        <table class="video-list">
-            <thead>
-                <tr>
-                    <th>Nombre</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="videoTable"></tbody>
-        </table>
-    </div>
-
-</div>
-
 <script>
 const videoTable = document.getElementById('videoTable');
 
@@ -60,6 +5,7 @@ const videoTable = document.getElementById('videoTable');
 async function renderVideos() {
     try {
         const res = await fetch('/videos');
+        if (!res.ok) throw new Error('Error al obtener videos');
         const videos = await res.json();
         videoTable.innerHTML = '';
         videos.forEach(v => {
@@ -89,11 +35,11 @@ async function toggleStatus(id) {
     try {
         const res = await fetch(`/videos/${id}/toggle`, { method: 'POST' });
         const data = await res.json();
-        alert(`Estado actualizado: ${data.active ? 'Activo':'Inactivo'}`);
+        if (!res.ok) throw new Error(data.message || 'Error al actualizar estado');
         renderVideos();
     } catch(err) {
         console.error(err);
-        alert('Error al actualizar estado');
+        alert(err.message);
     }
 }
 
@@ -102,11 +48,11 @@ async function deleteVideo(id) {
     try {
         const res = await fetch(`/videos/${id}`, { method: 'DELETE' });
         const data = await res.json();
-        alert(data.message);
+        if (!res.ok) throw new Error(data.message || 'Error al eliminar video');
         renderVideos();
     } catch(err) {
         console.error(err);
-        alert('Error al eliminar video');
+        alert(err.message);
     }
 }
 
@@ -121,11 +67,12 @@ async function uploadVideo() {
     try {
         const res = await fetch('/upload', { method:'POST', body: formData });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Error al subir video');
         alert(data.message);
         renderVideos();
     } catch(err) {
         console.error(err);
-        alert('Error al subir video');
+        alert(err.message);
     }
 }
 
@@ -134,16 +81,14 @@ async function updatePlaylist() {
     try {
         const res = await fetch('/playlist/update', { method:'POST' });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Error al actualizar playlist');
         alert(data.message);
     } catch(err) {
         console.error(err);
-        alert('Error al actualizar playlist');
+        alert(err.message);
     }
 }
 
-// Inicializar tabla
+// Inicializar tabla al cargar
 renderVideos();
 </script>
-
-</body>
-</html>
