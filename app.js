@@ -4,6 +4,7 @@ const multer = require('multer');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,8 +12,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Servir frontend
+app.use(cors()); // Habilita CORS para subdominios si es necesario
 app.use(express.static('public'));
 
 // Carpeta de videos
@@ -25,11 +25,11 @@ const upload = multer({ dest: process.env.VIDEOS_DIR });
 
 // Conexión MySQL
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,    // debe ser el nombre del servicio MySQL en Docker
+  host: process.env.DB_HOST || 'db', // Nombre del servicio MySQL en Docker
   port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
+  user: process.env.DB_USER || 'radiouser',
+  password: process.env.DB_PASS || 'pass1234',
+  database: process.env.DB_NAME || 'radiocentro',
   waitForConnections: true,
   connectionLimit: 10
 });
@@ -40,15 +40,18 @@ app.get('/health', async (req, res) => {
     await pool.query('SELECT 1');
     res.send('OK');
   } catch (err) {
+    console.error('Healthcheck DB failed:', err);
     res.status(500).send('DB connection failed');
   }
 });
 
-// Actualizar playlist.txt
+// Función para actualizar playlist.txt
 async function updatePlaylistFile() {
   try {
     const [videos] = await pool.query('SELECT * FROM videos WHERE active=1 ORDER BY position ASC');
-    const playlistContent = videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n');
+    const playlistContent = videos.length
+      ? videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n')
+      : '';
     fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
     console.log('Playlist actualizada');
   } catch (err) {
@@ -56,7 +59,9 @@ async function updatePlaylistFile() {
   }
 }
 
-// Rutas API
+// Endpoints API
+
+// Obtener lista de videos
 app.get('/videos', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM videos ORDER BY position ASC');
