@@ -13,7 +13,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+app.use(express.static('public')); // carpeta para archivos estáticos
+
+// Validar variables de entorno
+if (!process.env.VIDEOS_DIR) process.env.VIDEOS_DIR = path.join(__dirname, 'videos');
+if (!process.env.SQLITE_FILE) process.env.SQLITE_FILE = path.join(__dirname, 'data', 'database.sqlite');
 
 // Carpetas de videos
 if (!fs.existsSync(process.env.VIDEOS_DIR)) {
@@ -21,8 +25,9 @@ if (!fs.existsSync(process.env.VIDEOS_DIR)) {
 }
 
 // Carpeta de datos
-if (!fs.existsSync('./data')) {
-  fs.mkdirSync('./data', { recursive: true });
+const dataDir = path.dirname(process.env.SQLITE_FILE);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
 // Multer para subida de videos
@@ -30,20 +35,29 @@ const upload = multer({ dest: process.env.VIDEOS_DIR });
 
 // Conexión a SQLite
 const db = new Database(process.env.SQLITE_FILE);
-db.prepare(`CREATE TABLE IF NOT EXISTS videos (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT,
-  filename TEXT,
-  active INTEGER DEFAULT 1,
-  position INTEGER DEFAULT 0
-)`).run();
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS videos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    filename TEXT,
+    active INTEGER DEFAULT 1,
+    position INTEGER DEFAULT 0
+  )
+`).run();
 
 // Función para actualizar playlist.txt
 function updatePlaylistFile() {
   const videos = db.prepare('SELECT * FROM videos WHERE active=1 ORDER BY position ASC').all();
-  const playlistContent = videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n');
+  const playlistContent = videos
+    .map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`)
+    .join('\n');
   fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
 }
+
+// Ruta principal (para evitar Cannot GET /)
+app.get('/', (req, res) => {
+  res.send('Servidor de videos funcionando correctamente');
+});
 
 // Rutas API
 app.get('/videos', (req, res) => {
@@ -79,4 +93,4 @@ app.post('/playlist/update', (req, res) => {
 });
 
 // Iniciar servidor
-app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
