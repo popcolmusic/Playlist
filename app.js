@@ -13,24 +13,19 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public')); // carpeta para archivos estáticos
 
-// Validar variables de entorno
+// Carpetas y archivos de configuración
 if (!process.env.VIDEOS_DIR) process.env.VIDEOS_DIR = path.join(__dirname, 'videos');
-if (!process.env.SQLITE_FILE) process.env.SQLITE_FILE = path.join(__dirname, 'data', 'database.sqlite');
+if (!process.env.SQLITE_FILE) process.env.SQLITE_FILE = path.join(__dirname, 'data', 'playlist.db');
 
-// Carpetas de videos
-if (!fs.existsSync(process.env.VIDEOS_DIR)) {
-  fs.mkdirSync(process.env.VIDEOS_DIR, { recursive: true });
-}
-
-// Carpeta de datos
+if (!fs.existsSync(process.env.VIDEOS_DIR)) fs.mkdirSync(process.env.VIDEOS_DIR, { recursive: true });
 const dataDir = path.dirname(process.env.SQLITE_FILE);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-// Multer para subida de videos
+// Sirve archivos estáticos desde public
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Multer para subir videos
 const upload = multer({ dest: process.env.VIDEOS_DIR });
 
 // Conexión a SQLite
@@ -48,18 +43,20 @@ db.prepare(`
 // Función para actualizar playlist.txt
 function updatePlaylistFile() {
   const videos = db.prepare('SELECT * FROM videos WHERE active=1 ORDER BY position ASC').all();
-  const playlistContent = videos
-    .map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`)
-    .join('\n');
+  const playlistContent = videos.map(v => `file '${path.join(process.env.VIDEOS_DIR, v.filename)}'`).join('\n');
   fs.writeFileSync(path.join(process.env.VIDEOS_DIR, 'playlist.txt'), playlistContent);
 }
 
-// Ruta principal (para evitar Cannot GET /)
+// Rutas
 app.get('/', (req, res) => {
-  res.send('Servidor de videos funcionando correctamente');
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.send('Servidor de videos funcionando correctamente');
+  }
 });
 
-// Rutas API
 app.get('/videos', (req, res) => {
   const videos = db.prepare('SELECT * FROM videos ORDER BY position ASC').all();
   res.json(videos);
@@ -69,9 +66,7 @@ app.post('/upload', upload.single('video'), (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).send('No se subió ningún archivo');
 
-  db.prepare('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)')
-    .run(file.originalname, file.filename);
-
+  db.prepare('INSERT INTO videos (title, filename, active, position) VALUES (?,?,1,0)').run(file.originalname, file.filename);
   updatePlaylistFile();
   res.json({ message: 'Video subido y playlist actualizada', file });
 });
