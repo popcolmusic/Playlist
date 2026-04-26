@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   traefik:
-    image: traefik:v2.10
+    image: traefik:latest
     container_name: traefik
     restart: always
     command:
@@ -15,8 +15,8 @@ services:
       - "--certificatesresolvers.myresolver.acme.email=TU_EMAIL@example.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "8080:80"   # HTTP alternativo para pruebas
+      - "8443:443"  # HTTPS alternativo para pruebas
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "traefik_data:/letsencrypt"
@@ -35,8 +35,6 @@ services:
       - "traefik.http.routers.playlist.entrypoints=websecure"
       - "traefik.http.routers.playlist.tls.certresolver=myresolver"
       - "traefik.http.services.playlist.loadbalancer.server.port=3000"
-    ports:
-      - "3001:3000"
     networks:
       - backend-net
     environment:
@@ -60,8 +58,6 @@ services:
       - "traefik.http.routers.videos.entrypoints=websecure"
       - "traefik.http.routers.videos.tls.certresolver=myresolver"
       - "traefik.http.services.videos.loadbalancer.server.port=3000"
-    ports:
-      - "3002:3000"
     networks:
       - backend-net
     environment:
