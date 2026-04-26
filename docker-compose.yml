@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=TU_EMAIL@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik_data:/letsencrypt"
+
+  playlist:
+    image: node:18-alpine
+    container_name: playlist-app
+    restart: always
+    working_dir: /app
+    volumes:
+      - '/home/usuario/Playlist:/app'
+      - 'playlist_sqlite:/app/data/sqlite'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.playlist.rule=Host(`playlist.radiocentro.net`)"
+      - "traefik.http.routers.playlist.entrypoints=websecure"
+      - "traefik.http.routers.playlist.tls.certresolver=myresolver"
+      - "traefik.http.services.playlist.loadbalancer.server.port=3000"
+    ports:
+      - "3001:3000"
+    networks:
+      - backend-net
+    environment:
+      VIDEOS_DIR: /videos
+      PORT: 3000
+      SQLITE_FILE: /app/data/sqlite/playlist.db
+    command: >
+      sh -c "apk add --no-cache make g++ python3 && npm install && node app.js"
+
+  videos:
+    image: node:18-alpine
+    container_name: videos-app
+    restart: always
+    working_dir: /app
+    volumes:
+      - '/home/usuario/Playlist:/app'
+      - 'playlist_sqlite:/app/data/sqlite'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.videos.rule=Host(`videos.radiocentro.net`)"
+      - "traefik.http.routers.videos.entrypoints=websecure"
+      - "traefik.http.routers.videos.tls.certresolver=myresolver"
+      - "traefik.http.services.videos.loadbalancer.server.port=3000"
+    ports:
+      - "3002:3000"
+    networks:
+      - backend-net
+    environment:
+      VIDEOS_DIR: /videos
+      PORT: 3000
+      SQLITE_FILE: /app/data/sqlite/playlist.db
+    command: >
+      sh -c "apk add --no-cache make g++ python3 && npm install && node app.js"
+
+networks:
+  backend-net:
+    driver: bridge
+
+volumes:
+  traefik_data:
+  playlist_sqlite:
