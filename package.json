@@ -1,7 +1,6 @@
 {
   "name": "playlist-main-radiocentro",
   "version": "1.0.0",
-  "description": "Panel admin Radiocentro para subir videos y actualizar playlist",
   "main": "app.js",
   "scripts": {
     "start": "node app.js"
