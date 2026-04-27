@@ -1,29 +1,23 @@
-# Dockerfile
 FROM node:18-alpine
 
-# Crear directorio de trabajo
 WORKDIR /app
 
-# Copiar package.json y package-lock.json primero para instalar dependencias
 COPY package*.json ./
 
-# Instalar dependencias
-RUN apk add --no-cache make g++ python3 \
+RUN apk add --no-cache \
+    ffmpeg \
+    make \
+    g++ \
+    python3 \
     && npm install
 
-# Copiar el resto del código
 COPY . .
 
-# Variables de entorno (opcional, pueden venir de docker-compose)
 ENV PORT=3000
 ENV VIDEOS_DIR=/videos
-ENV SQLITE_FILE=/app/data/sqlite/playlist.db
 
-# Crear carpetas necesarias
-RUN mkdir -p /videos /app/data/sqlite
+RUN mkdir -p /videos
 
-# Exponer puerto interno (Traefik lo mapeará)
 EXPOSE 3000
 
-# Iniciar la app
 CMD ["node", "app.js"]
