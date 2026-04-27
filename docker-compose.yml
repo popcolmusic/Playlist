@@ -1,76 +1,29 @@
-version: '3.8'
+# Dockerfile
+FROM node:18-alpine
 
-services:
-  traefik:
-    image: traefik:latest
-    container_name: traefik
-    restart: always
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=TU_EMAIL@example.com"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "8080:80"   # HTTP alternativo para pruebas
-      - "8443:443"  # HTTPS alternativo para pruebas
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "traefik_data:/letsencrypt"
+# Crear directorio de trabajo
+WORKDIR /app
 
-  playlist:
-    image: node:18-alpine
-    container_name: playlist-app
-    restart: always
-    working_dir: /app
-    volumes:
-      - '/home/usuario/Playlist:/app'
-      - 'playlist_sqlite:/app/data/sqlite'
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.playlist.rule=Host(`playlist.radiocentro.net`)"
-      - "traefik.http.routers.playlist.entrypoints=websecure"
-      - "traefik.http.routers.playlist.tls.certresolver=myresolver"
-      - "traefik.http.services.playlist.loadbalancer.server.port=3000"
-    networks:
-      - backend-net
-    environment:
-      VIDEOS_DIR: /videos
-      PORT: 3000
-      SQLITE_FILE: /app/data/sqlite/playlist.db
-    command: >
-      sh -c "apk add --no-cache make g++ python3 && npm install && node app.js"
+# Copiar package.json y package-lock.json primero para instalar dependencias
+COPY package*.json ./
 
-  videos:
-    image: node:18-alpine
-    container_name: videos-app
-    restart: always
-    working_dir: /app
-    volumes:
-      - '/home/usuario/Playlist:/app'
-      - 'playlist_sqlite:/app/data/sqlite'
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.videos.rule=Host(`videos.radiocentro.net`)"
-      - "traefik.http.routers.videos.entrypoints=websecure"
-      - "traefik.http.routers.videos.tls.certresolver=myresolver"
-      - "traefik.http.services.videos.loadbalancer.server.port=3000"
-    networks:
-      - backend-net
-    environment:
-      VIDEOS_DIR: /videos
-      PORT: 3000
-      SQLITE_FILE: /app/data/sqlite/playlist.db
-    command: >
-      sh -c "apk add --no-cache make g++ python3 && npm install && node app.js"
+# Instalar dependencias
+RUN apk add --no-cache make g++ python3 \
+    && npm install
 
-networks:
-  backend-net:
-    driver: bridge
+# Copiar el resto del código
+COPY . .
 
-volumes:
-  traefik_data:
-  playlist_sqlite:
+# Variables de entorno (opcional, pueden venir de docker-compose)
+ENV PORT=3000
+ENV VIDEOS_DIR=/videos
+ENV SQLITE_FILE=/app/data/sqlite/playlist.db
+
+# Crear carpetas necesarias
+RUN mkdir -p /videos /app/data/sqlite
+
+# Exponer puerto interno (Traefik lo mapeará)
+EXPOSE 3000
+
+# Iniciar la app
+CMD ["node", "app.js"]
