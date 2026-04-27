@@ -87,5 +87,5 @@ app.post('/playlist/update', (req, res) => {
   res.json({ message: 'Playlist actualizada' });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
+// Iniciar servidor en todas las interfaces (IMPORTANTE para Coolify)
+app.listen(PORT, '0.0.0.0', () => console.log(`Servidor corriendo en http://0.0.0.0:${PORT}`));
