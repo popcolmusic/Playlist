@@ -18,7 +18,11 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || '/var/www/media/uploads_tmp';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const SQLITE_FILE = process.env.SQLITE_FILE || path.join(DATA_DIR, 'playlist.db');
 const RTMP_URL = process.env.RTMP_URL || 'rtmp://127.0.0.1/live/abc123';
-const LOGO_PATH = process.env.LOGO_PATH || '/var/www/media/assets/logo-transparente.png';
+const LOGO_PATH = process.env.LOGO_PATH || (
+  fs.existsSync('/var/www/media/assets/logo-transparente.png')
+    ? '/var/www/media/assets/logo-transparente.png'
+    : '/var/www/media/assets/logo.png'
+);
 const AUTO_START = String(process.env.AUTO_START || 'false').toLowerCase() === 'true';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'playlist-radio-centro-secret';
 
@@ -269,6 +273,7 @@ function buildFfmpegArgs(listPath) {
 
 function startStream() {
   if (ffmpegProcess) return { ok: true, message: 'Ya está transmitiendo' };
+  desiredLive = true;
 
   const videos = getVideos({ onlyActive: true });
 
@@ -295,7 +300,7 @@ function startStream() {
 
     // Si AUTO_START=true, intenta levantar nuevamente la transmisión.
     // Esto ayuda a que la playlist permanezca activa si FFmpeg se cae.
-    if (AUTO_START) {
+    if (AUTO_START && desiredLive) {
       setTimeout(() => {
         const result = startStream();
         console.log('Auto reinicio FFmpeg:', result.message);
@@ -307,10 +312,16 @@ function startStream() {
 }
 
 function stopStream() {
+  desiredLive = false;
+
   if (ffmpegProcess) {
     ffmpegProcess.kill('SIGTERM');
     ffmpegProcess = null;
   }
+
+  try {
+    spawn('pkill', ['-f', 'ffmpeg']);
+  } catch (e) {}
 }
 
 app.get('/login', (req, res) => {
